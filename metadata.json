@@ -1,0 +1,6 @@
+{
+  "name": "Romantic Date Invitation",
+  "description": "An interactive, playful romantic invitation to ask your girlfriend out with falling hearts, an evasive 'No' button, celebration animations, and date and Ghanaian food planner.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
