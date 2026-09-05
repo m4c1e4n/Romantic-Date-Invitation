@@ -310,8 +310,8 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         </div>
 
         {/* Header section matching Natural Tones typography */}
-        <div className="text-center space-y-1.5 sm:space-y-2 max-w-xl px-2">
-          <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-serif text-[#6B2836] font-bold tracking-tight leading-tight">
+        <div className="text-center space-y-1.5 sm:space-y-2 max-w-2xl lg:max-w-3xl w-full px-2">
+          <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl xl:text-[2.6rem] font-serif text-[#6B2836] font-bold tracking-tight leading-tight sm:whitespace-nowrap">
             🌸 Will you go on a date with me? 🌸
           </h1>
           <p className="text-slate-500 text-xs sm:text-sm md:text-base pt-0.5 leading-relaxed">
