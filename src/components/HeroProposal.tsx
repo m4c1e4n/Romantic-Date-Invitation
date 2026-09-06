@@ -80,11 +80,11 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     };
   }, []);
 
-  // Trigger runaway movement away from cursor, guaranteed to stay 100% inside arena
-  const handleDodge = (cursorX?: number, cursorY?: number) => {
+  // Trigger runaway movement away from cursor/tap, guaranteed to move away and stay 100% inside card
+  const handleDodge = (cursorX?: number, cursorY?: number, isDirectAttempt = false) => {
     const now = performance.now();
-    // 160ms cooldown ensures smooth, playful evasions without jerky cutting-off
-    if (now - lastDodgeTime.current < 160) return;
+    // Allow direct clicks/taps to always trigger evasion without debounce
+    if (!isDirectAttempt && now - lastDodgeTime.current < 90) return;
     lastDodgeTime.current = now;
 
     playDodgeSound();
@@ -94,16 +94,18 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     setCurrentPhrase(nextPhrase);
 
     const natural = getNaturalPos();
-    const arenaRect = arenaRectRef.current || arenaRef.current?.getBoundingClientRect();
+    const arena = arenaRef.current;
+    const arenaRect = arenaRectRef.current || arena?.getBoundingClientRect();
 
-    if (arenaRect && natural) {
-      // Inner padding of card
-      const pad = window.innerWidth < 640 ? 18 : 24;
+    if (arena && arenaRect && natural) {
+      const isMobile = window.innerWidth < 640;
+      const isTablet = window.innerWidth >= 640 && window.innerWidth < 1024;
+      const pad = isMobile ? 14 : 22;
 
       // Button half-dimensions with safety margin (including top badge)
-      const btnHalfW = natural.width / 2 + 8;
-      const btnTopH = natural.height / 2 + 22; // extra room for "Can't catch me!" badge
-      const btnBottomH = natural.height / 2 + 8;
+      const btnHalfW = natural.width / 2 + 6;
+      const btnTopH = natural.height / 2 + 20; // extra room for "Can't catch me!" badge
+      const btnBottomH = natural.height / 2 + 6;
 
       // Card bounding bounds
       const minX = pad + btnHalfW;
@@ -111,151 +113,163 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
       const minY = pad + btnTopH;
       const maxY = arenaRect.height - pad - btnBottomH;
 
-      // Collect all text and interactive obstacles to never cover
-      const obstacles: { left: number; right: number; top: number; bottom: number }[] = [];
-      const obstacleElements = arenaRef.current?.querySelectorAll('[data-text-zone="true"]');
-      if (obstacleElements) {
-        obstacleElements.forEach((el) => {
-          const r = el.getBoundingClientRect();
-          // Add 12px safety padding around all text/obstacles
-          obstacles.push({
-            left: r.left - arenaRect.left - 12,
-            right: r.right - arenaRect.left + 12,
-            top: r.top - arenaRect.top - 12,
-            bottom: r.bottom - arenaRect.top + 12,
-          });
-        });
-      }
+      // Current center coordinates inside the card
+      const currentCenterX = natural.centerX + buttonPosRef.current.x;
+      const currentCenterY = natural.centerY + buttonPosRef.current.y;
+      const currentVpX = arenaRect.left + currentCenterX;
+      const currentVpY = arenaRect.top + currentCenterY;
 
-      // Check if candidate center position in arena coordinates is 100% clear of all text
-      const isPositionClear = (cx: number, cy: number): boolean => {
-        if (cx < minX || cx > maxX || cy < minY || cy > maxY) return false;
-        const bLeft = cx - btnHalfW;
-        const bRight = cx + btnHalfW;
-        const bTop = cy - btnTopH;
-        const bBottom = cy + btnBottomH;
+      // Target tap/cursor coordinates to flee from
+      const fleeFromX = cursorX ?? currentVpX;
+      const fleeFromY = cursorY ?? currentVpY;
+
+      // Collect only real text elements and interactive obstacles
+      const obstacles: { left: number; right: number; top: number; bottom: number }[] = [];
+      const textElements = arena.querySelectorAll('[data-text-zone="true"]');
+      textElements.forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          obstacles.push({
+            left: r.left - arenaRect.left - 6,
+            right: r.right - arenaRect.left + 6,
+            top: r.top - arenaRect.top - 6,
+            bottom: r.bottom - arenaRect.top + 6,
+          });
+        }
+      });
+
+      // Overlap calculation: returns true if candidate overlaps any text
+      const overlapsAnyText = (cx: number, cy: number): boolean => {
+        const bL = cx - btnHalfW;
+        const bR = cx + btnHalfW;
+        const bT = cy - btnTopH;
+        const bB = cy + btnBottomH;
 
         for (const obs of obstacles) {
-          const overlaps = !(
-            bRight < obs.left ||
-            bLeft > obs.right ||
-            bBottom < obs.top ||
-            bTop > obs.bottom
-          );
-          if (overlaps) return false;
+          if (!(bR < obs.left || bL > obs.right || bB < obs.top || bT > obs.bottom)) {
+            return true;
+          }
         }
-        return true;
+        return false;
       };
 
-      // Current center coordinates inside the card
-      const currentCenterXInArena = natural.centerX + buttonPosRef.current.x;
-      const currentCenterYInArena = natural.centerY + buttonPosRef.current.y;
-      const currentViewportCenterX = arenaRect.left + currentCenterXInArena;
-      const currentViewportCenterY = arenaRect.top + currentCenterYInArena;
-
-      // Target cursor position to flee from
-      const targetCursorX = cursorX ?? currentViewportCenterX;
-      const targetCursorY = cursorY ?? currentViewportCenterY;
-
-      // Fast vector evasion away from cursor
-      let dirX = currentViewportCenterX - targetCursorX;
-      let dirY = currentViewportCenterY - targetCursorY;
-      let dist = Math.hypot(dirX, dirY);
-
-      if (dist < 1) {
-        dirX = (Math.random() - 0.5) * 2;
-        dirY = (Math.random() - 0.5) * 2;
-        dist = Math.hypot(dirX, dirY) || 1;
-      }
-
-      const baseAngle = Math.atan2(dirY, dirX);
+      // Strict guarantee: MUST move at least minJumpDistance away from current position!
+      const minJumpDistance = isMobile ? 85 : (isTablet ? 110 : 140);
 
       interface Candidate {
         cx: number;
         cy: number;
-        distToCursor: number;
+        distToTap: number;
+        distToCurrent: number;
+        overlapsText: boolean;
       }
-      const validCandidates: Candidate[] = [];
+      const allCandidates: Candidate[] = [];
 
-      // 1. Generate radial evasion rays away from cursor at various angles and leaps
-      const testAngles = [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.57, -1.57, 2.1, -2.1, Math.PI];
-      const testDistances = [150, 190, 230, 280, 320, 120];
+      // Evasion vector away from tap/cursor
+      let dirX = currentVpX - fleeFromX;
+      let dirY = currentVpY - fleeFromY;
+      let distToTap = Math.hypot(dirX, dirY);
+      if (distToTap < 1) {
+        dirX = (Math.random() - 0.5) * 2;
+        dirY = (Math.random() - 0.5) * 2;
+        distToTap = Math.hypot(dirX, dirY) || 1;
+      }
+      const baseAngle = Math.atan2(dirY, dirX);
 
-      for (const d of testDistances) {
-        for (const a of testAngles) {
-          const testCx = currentCenterXInArena + Math.cos(baseAngle + a) * d;
-          const testCy = currentCenterYInArena + Math.sin(baseAngle + a) * d;
-          if (isPositionClear(testCx, testCy)) {
-            const vpX = arenaRect.left + testCx;
-            const vpY = arenaRect.top + testCy;
-            const dCursor = Math.hypot(vpX - targetCursorX, vpY - targetCursorY);
-            validCandidates.push({ cx: testCx, cy: testCy, distToCursor: dCursor });
+      // 1. Radial evasion rays away from tap
+      const angles = [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.57, -1.57, 2.2, -2.2, Math.PI];
+      const distances = isMobile
+        ? [95, 125, 160, 200, 75]
+        : [140, 185, 230, 280, 110];
+
+      for (const d of distances) {
+        for (const a of angles) {
+          const testX = Math.max(minX, Math.min(maxX, currentCenterX + Math.cos(baseAngle + a) * d));
+          const testY = Math.max(minY, Math.min(maxY, currentCenterY + Math.sin(baseAngle + a) * d));
+          const dCurrent = Math.hypot(testX - currentCenterX, testY - currentCenterY);
+          if (dCurrent >= minJumpDistance) {
+            const vpX = arenaRect.left + testX;
+            const vpY = arenaRect.top + testY;
+            const dTap = Math.hypot(vpX - fleeFromX, vpY - fleeFromY);
+            allCandidates.push({
+              cx: testX,
+              cy: testY,
+              distToTap: dTap,
+              distToCurrent: dCurrent,
+              overlapsText: overlapsAnyText(testX, testY),
+            });
           }
         }
       }
 
-      // 2. Also test spacious designated zones on the card (e.g. top corners beside puppy, lower corners)
-      const topCornerY = pad + btnTopH + 10;
-      const bottomCornerY = arenaRect.height - pad - btnBottomH - 10;
-
+      // 2. Open pocket anchor points across the card (corners, flanks, bottom, top)
       const anchorSpots = [
-        { cx: minX + 8, cy: topCornerY }, // Top-Left beside puppy
-        { cx: maxX - 8, cy: topCornerY }, // Top-Right beside puppy
-        { cx: minX + 8, cy: bottomCornerY }, // Bottom-Left
-        { cx: maxX - 8, cy: bottomCornerY }, // Bottom-Right
-        { cx: minX + 8, cy: arenaRect.height * 0.5 }, // Mid-Left flank
-        { cx: maxX - 8, cy: arenaRect.height * 0.5 }, // Mid-Right flank
-        { cx: arenaRect.width * 0.22, cy: arenaRect.height * 0.76 }, // Lower-Left
-        { cx: arenaRect.width * 0.78, cy: arenaRect.height * 0.76 }, // Lower-Right
+        { cx: minX + 6, cy: minY + 6 }, // Top-Left
+        { cx: maxX - 6, cy: minY + 6 }, // Top-Right
+        { cx: minX + 6, cy: maxY - 6 }, // Bottom-Left
+        { cx: maxX - 6, cy: maxY - 6 }, // Bottom-Right
+        { cx: minX + 6, cy: arenaRect.height * 0.72 }, // Lower-Left flank
+        { cx: maxX - 6, cy: arenaRect.height * 0.72 }, // Lower-Right flank
+        { cx: arenaRect.width * 0.2, cy: maxY - 6 }, // Bottom-Center-Left
+        { cx: arenaRect.width * 0.8, cy: maxY - 6 }, // Bottom-Center-Right
+        { cx: minX + 6, cy: arenaRect.height * 0.42 }, // Mid-Left flank
+        { cx: maxX - 6, cy: arenaRect.height * 0.42 }, // Mid-Right flank
       ];
 
       for (const spot of anchorSpots) {
-        if (isPositionClear(spot.cx, spot.cy)) {
+        const dCurrent = Math.hypot(spot.cx - currentCenterX, spot.cy - currentCenterY);
+        if (dCurrent >= minJumpDistance) {
           const vpX = arenaRect.left + spot.cx;
           const vpY = arenaRect.top + spot.cy;
-          const dCursor = Math.hypot(vpX - targetCursorX, vpY - targetCursorY);
-          validCandidates.push({ cx: spot.cx, cy: spot.cy, distToCursor: dCursor });
+          const dTap = Math.hypot(vpX - fleeFromX, vpY - fleeFromY);
+          allCandidates.push({
+            cx: spot.cx,
+            cy: spot.cy,
+            distToTap: dTap,
+            distToCurrent: dCurrent,
+            overlapsText: overlapsAnyText(spot.cx, spot.cy),
+          });
         }
       }
 
-      let chosenTarget = { cx: currentCenterXInArena, cy: currentCenterYInArena };
+      // Filter candidates that have ZERO text overlap AND are at least minJumpDistance away
+      const cleanCandidates = allCandidates.filter((c) => !c.overlapsText);
 
-      if (validCandidates.length > 0) {
-        // Sort descending by distance from cursor (farthest first)
-        validCandidates.sort((a, b) => b.distToCursor - a.distToCursor);
-        // Pick randomly among the top 4 candidates for playful variety
-        const topPool = validCandidates.slice(0, Math.min(4, validCandidates.length));
-        const picked = topPool[Math.floor(Math.random() * topPool.length)];
-        chosenTarget = { cx: picked.cx, cy: picked.cy };
+      let chosen: { cx: number; cy: number };
+
+      if (cleanCandidates.length > 0) {
+        // Sort descending by distance from tap point
+        cleanCandidates.sort((a, b) => b.distToTap - a.distToTap);
+        const pool = cleanCandidates.slice(0, Math.min(3, cleanCandidates.length));
+        const picked = pool[Math.floor(Math.random() * pool.length)];
+        chosen = { cx: picked.cx, cy: picked.cy };
+      } else if (allCandidates.length > 0) {
+        // Fallback: pick the candidate farthest from tap that satisfies minJumpDistance
+        allCandidates.sort((a, b) => b.distToTap - a.distToTap);
+        chosen = { cx: allCandidates[0].cx, cy: allCandidates[0].cy };
       } else {
-        // Fallback: search a 25px grid across card for any position clear of text
-        let bestSpot: Candidate | null = null;
-        for (let gx = minX; gx <= maxX; gx += 25) {
-          for (let gy = minY; gy <= maxY; gy += 25) {
-            if (isPositionClear(gx, gy)) {
-              const vpX = arenaRect.left + gx;
-              const vpY = arenaRect.top + gy;
-              const dCursor = Math.hypot(vpX - targetCursorX, vpY - targetCursorY);
-              if (!bestSpot || dCursor > bestSpot.distToCursor) {
-                bestSpot = { cx: gx, cy: gy, distToCursor: dCursor };
-              }
-            }
-          }
-        }
-        if (bestSpot) {
-          chosenTarget = { cx: bestSpot.cx, cy: bestSpot.cy };
-        }
+        // Forceful leap to opposite quadrant of card
+        const oppX = currentCenterX < arenaRect.width / 2 ? maxX - 8 : minX + 8;
+        const oppY = currentCenterY < arenaRect.height / 2 ? maxY - 8 : minY + 8;
+        chosen = { cx: oppX, cy: oppY };
       }
 
-      const targetX = chosenTarget.cx - natural.centerX;
-      const targetY = chosenTarget.cy - natural.centerY;
+      // Hard mathematical guarantee: displacement must be at least minJumpDistance
+      const actualDist = Math.hypot(chosen.cx - currentCenterX, chosen.cy - currentCenterY);
+      if (actualDist < minJumpDistance) {
+        chosen.cx = currentCenterX < arenaRect.width / 2 ? maxX - 8 : minX + 8;
+        chosen.cy = currentCenterY < arenaRect.height / 2 ? maxY - 8 : minY + 8;
+      }
+
+      const targetX = chosen.cx - natural.centerX;
+      const targetY = chosen.cy - natural.centerY;
 
       buttonPosRef.current = { x: targetX, y: targetY };
       setButtonPos({ x: targetX, y: targetY });
       setHasMoved(true);
     } else {
-      const fallbackX = (Math.random() * 2 - 1) * 70;
-      const fallbackY = (Math.random() * 2 - 1) * 40;
+      const fallbackX = (Math.random() > 0.5 ? 1 : -1) * (window.innerWidth < 640 ? 90 : 140);
+      const fallbackY = (Math.random() > 0.5 ? 1 : -1) * (window.innerWidth < 640 ? 70 : 100);
       buttonPosRef.current = { x: fallbackX, y: fallbackY };
       setButtonPos({ x: fallbackX, y: fallbackY });
       setHasMoved(true);
@@ -358,28 +372,29 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         className="bg-white/95 sm:bg-white/90 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-5 sm:p-8 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-7 overflow-hidden"
       >
         {/* Cute puppy avatar matching viral video */}
-        <div data-text-zone="true" className="relative">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl sm:rounded-3xl overflow-hidden border-2 sm:border-3 border-rose-200 shadow-md bg-rose-100 flex items-center justify-center text-4xl sm:text-5xl select-none">
+        <div className="relative">
+          <div data-text-zone="true" className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl sm:rounded-3xl overflow-hidden border-2 sm:border-3 border-rose-200 shadow-md bg-rose-100 flex items-center justify-center text-4xl sm:text-5xl select-none">
             🐶
           </div>
           <span className="absolute -bottom-1 -right-1 text-xl sm:text-2xl filter drop-shadow-sm">🌸</span>
         </div>
 
         {/* Header section matching Natural Tones typography */}
-        <div data-text-zone="true" className="text-center space-y-1.5 sm:space-y-2 max-w-2xl lg:max-w-3xl w-full px-2">
-          <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl xl:text-[2.6rem] font-serif text-[#6B2836] font-bold tracking-tight leading-tight sm:whitespace-nowrap">
+        <div className="text-center space-y-1.5 sm:space-y-2 max-w-2xl lg:max-w-3xl w-full px-2">
+          <h1 data-text-zone="true" className="text-lg sm:text-2xl md:text-3xl lg:text-4xl xl:text-[2.6rem] font-serif text-[#6B2836] font-bold tracking-tight leading-tight sm:whitespace-nowrap">
             🌸 Will you go on a date with me? 🌸
           </h1>
-          <p className="text-slate-500 text-xs sm:text-sm md:text-base pt-0.5 leading-relaxed">
+          <p data-text-zone="true" className="text-slate-500 text-xs sm:text-sm md:text-base pt-0.5 leading-relaxed">
             I promise it will be filled with good food, sweet laughs, and you being spoiled. 💕
           </p>
         </div>
 
         {/* Fun Teasing Message Banner when dodge happens */}
-        <div data-text-zone="true" className="min-h-[36px] sm:min-h-[40px] flex items-center justify-center px-2">
+        <div className="min-h-[36px] sm:min-h-[40px] flex items-center justify-center px-2">
           <AnimatePresence mode="wait">
             {currentPhrase ? (
               <motion.div
+                data-text-zone="true"
                 key={dodgeCount}
                 initial={{ opacity: 0, y: -6, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -390,7 +405,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
                 <span>{currentPhrase}</span>
               </motion.div>
             ) : (
-              <span className="text-[11px] sm:text-xs text-slate-400 font-medium tracking-wide flex items-center gap-1">
+              <span data-text-zone="true" className="text-[11px] sm:text-xs text-slate-400 font-medium tracking-wide flex items-center gap-1">
                 <span>P.S. There is really only one correct answer!</span>
                 <span>🌹</span>
               </span>
@@ -439,26 +454,31 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
                 onTouchStart={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleDodge();
+                  const t = e.touches[0];
+                  if (t) {
+                    handleDodge(t.clientX, t.clientY, true);
+                  } else {
+                    handleDodge(undefined, undefined, true);
+                  }
                 }}
                 onPointerDown={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleDodge(e.clientX, e.clientY);
+                  handleDodge(e.clientX, e.clientY, true);
                 }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleDodge();
+                  handleDodge(e.clientX, e.clientY, true);
                 }}
                 onFocus={(e) => {
                   e.preventDefault();
-                  handleDodge();
+                  handleDodge(undefined, undefined, true);
                   document.getElementById('btn-say-yes')?.focus();
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  handleDodge();
+                  handleDodge(undefined, undefined, true);
                 }}
                 className="cursor-pointer bg-[#E2E8F0] text-slate-500 font-bold px-5 py-2.5 sm:px-7 sm:py-3.5 min-h-[44px] rounded-2xl text-xs sm:text-sm border-2 border-dashed border-slate-300 hover:bg-slate-300 transition-colors whitespace-nowrap active:scale-95 select-none flex items-center justify-center gap-1.5 touch-manipulation"
               >

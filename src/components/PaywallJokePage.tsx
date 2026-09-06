@@ -63,7 +63,7 @@ export const PaywallJokePage: React.FC<PaywallJokePageProps> = ({
               Date Agreement™
             </span>
             <span className="font-serif font-bold text-[#6B2836] text-lg sm:text-xl md:text-2xl">
-              GH₵ 499
+              $499
             </span>
           </div>
           <p className="text-[10px] sm:text-[11px] text-slate-500 italic">
@@ -83,7 +83,7 @@ export const PaywallJokePage: React.FC<PaywallJokePageProps> = ({
             {isProcessing ? (
               <span>Authorizing Love Card... 💳</span>
             ) : (
-              <span>pay GH₵ 499 &amp; confirm 💖</span>
+              <span>pay $499 &amp; confirm 💖</span>
             )}
           </motion.button>
 
@@ -120,7 +120,7 @@ export const PaywallJokePage: React.FC<PaywallJokePageProps> = ({
                 <p className="text-xs text-slate-500 pt-1 leading-relaxed">
                   Promo code <span className="font-mono font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded">QUEEN_TREATMENT</span> applied.
                   <br />
-                  New Total: <strong className="text-slate-800">GH₵ 0.00</strong>
+                  New Total: <strong className="text-slate-800">$0.00</strong>
                   <br />
                   <span className="text-slate-400 italic text-[11px]">(Payment accepted in sweet smiles &amp; good vibes!)</span>
                 </p>

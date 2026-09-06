@@ -337,7 +337,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* Page 7: Separate Page for "GH₵ 499 Date Agreement" Joke Fee */}
+          {/* Page 7: Separate Page for "$499 Date Agreement" Joke Fee */}
           {currentStep === 'paywall' && (
             <motion.div
               key="paywall-page"
