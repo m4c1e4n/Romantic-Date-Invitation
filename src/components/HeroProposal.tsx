@@ -97,14 +97,14 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     const arenaRect = arenaRectRef.current || arenaRef.current?.getBoundingClientRect();
 
     if (arenaRect && natural) {
-      // Strict boundaries inside arena so the button is NEVER clipped or outside
-      const pad = 12;
+      // Boundaries inside the entire bigger card
+      const pad = window.innerWidth < 640 ? 20 : 28;
       const minCenterInArenaX = natural.width / 2 + pad;
       const maxCenterInArenaX = arenaRect.width - natural.width / 2 - pad;
       const minCenterInArenaY = natural.height / 2 + pad;
       const maxCenterInArenaY = arenaRect.height - natural.height / 2 - pad;
 
-      // Current center coordinates
+      // Current center coordinates inside the bigger card
       const currentCenterXInArena = natural.centerX + buttonPosRef.current.x;
       const currentCenterYInArena = natural.centerY + buttonPosRef.current.y;
       const currentViewportCenterX = arenaRect.left + currentCenterXInArena;
@@ -125,28 +125,48 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         dist = Math.hypot(dirX, dirY) || 1;
       }
 
-      // Add a slight playful angle jitter (+-40 deg)
+      // Add a slight playful angle jitter (+-45 deg)
       const baseAngle = Math.atan2(dirY, dirX);
-      const jitterAngle = baseAngle + (Math.random() - 0.5) * 0.8;
-      const jumpDistance = Math.random() * 50 + 110; // 110px - 160px leap
+      const jitterAngle = baseAngle + (Math.random() - 0.5) * 0.9;
+      const jumpDistance = Math.random() * 80 + 170; // 170px - 250px energetic leap across the card
 
       let targetCenterInArenaX = currentCenterXInArena + Math.cos(jitterAngle) * jumpDistance;
       let targetCenterInArenaY = currentCenterYInArena + Math.sin(jitterAngle) * jumpDistance;
 
-      // If escaping towards YES button or out of bounds, reflect away
+      // If escaping would hit a wall or get trapped near the card edge, flee to the opposite side of the card
+      if (
+        targetCenterInArenaX < minCenterInArenaX ||
+        targetCenterInArenaX > maxCenterInArenaX ||
+        targetCenterInArenaY < minCenterInArenaY ||
+        targetCenterInArenaY > maxCenterInArenaY
+      ) {
+        const cursorRelativeX = targetCursorX - arenaRect.left;
+        const cursorRelativeY = targetCursorY - arenaRect.top;
+        const farX = cursorRelativeX < arenaRect.width / 2
+          ? arenaRect.width * (0.6 + Math.random() * 0.28)
+          : arenaRect.width * (0.12 + Math.random() * 0.28);
+        const farY = cursorRelativeY < arenaRect.height / 2
+          ? arenaRect.height * (0.6 + Math.random() * 0.28)
+          : arenaRect.height * (0.12 + Math.random() * 0.28);
+
+        targetCenterInArenaX = farX;
+        targetCenterInArenaY = farY;
+      }
+
+      // If escaping towards YES button, deflect away across the card
       const yesBtn = document.getElementById('btn-say-yes');
       const yesRect = yesBtn?.getBoundingClientRect();
       if (yesRect) {
         const yesCenterXInArena = yesRect.left + yesRect.width / 2 - arenaRect.left;
         const yesCenterYInArena = yesRect.top + yesRect.height / 2 - arenaRect.top;
         const distToYes = Math.hypot(targetCenterInArenaX - yesCenterXInArena, targetCenterInArenaY - yesCenterYInArena);
-        if (distToYes < (yesRect.width + natural.width) / 2 + 15) {
-          targetCenterInArenaX += targetCenterInArenaX > yesCenterXInArena ? 80 : -80;
-          targetCenterInArenaY += targetCenterInArenaY > yesCenterYInArena ? 50 : -50;
+        if (distToYes < (yesRect.width + natural.width) / 2 + 35) {
+          targetCenterInArenaX += targetCenterInArenaX > yesCenterXInArena ? 120 : -120;
+          targetCenterInArenaY += targetCenterInArenaY > yesCenterYInArena ? 100 : -100;
         }
       }
 
-      // Strict boundary clamp so button stays 100% inside arena
+      // Strict boundary clamp so button stays 100% inside the bigger card
       const clampedCenterX = Math.max(minCenterInArenaX, Math.min(maxCenterInArenaX, targetCenterInArenaX));
       const clampedCenterY = Math.max(minCenterInArenaY, Math.min(maxCenterInArenaY, targetCenterInArenaY));
 
@@ -255,7 +275,11 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
 
   return (
     <div className="relative w-full max-w-3xl mx-auto px-3 sm:px-4 py-2 sm:py-6 md:py-8 z-10">
-      <div className="bg-white/95 sm:bg-white/90 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-5 sm:p-8 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-7 overflow-hidden">
+      <div
+        ref={arenaRef}
+        id="hero-proposal-card"
+        className="bg-white/95 sm:bg-white/90 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-5 sm:p-8 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-7 overflow-hidden"
+      >
         {/* Cute puppy avatar matching viral video */}
         <div className="relative">
           <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl sm:rounded-3xl overflow-hidden border-2 sm:border-3 border-rose-200 shadow-md bg-rose-100 flex items-center justify-center text-4xl sm:text-5xl select-none">
@@ -299,7 +323,6 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
 
         {/* Interactive Button Arena */}
         <div
-          ref={arenaRef}
           className="relative min-h-[185px] sm:min-h-[210px] md:min-h-[230px] w-full flex items-center justify-center gap-4 sm:gap-6 p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-rose-50/40 border border-rose-100/60"
         >
           {/* YES Button */}
@@ -316,10 +339,10 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
             <span>YES ♥</span>
           </button>
 
-          {/* NO Button (Evasive Runaway: Outruns Cursor Instantly!) */}
+          {/* NO Button (Evasive Runaway: Outruns Cursor Instantly across the bigger card!) */}
           <div
             id="btn-say-no-container"
-            className="relative z-10 touch-manipulation transform-gpu"
+            className="relative z-30 touch-manipulation transform-gpu"
             style={{
               transform: `translate3d(${buttonPos.x}px, ${buttonPos.y}px, 0)`,
               transition: hasMoved ? 'transform 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.15)' : 'none',

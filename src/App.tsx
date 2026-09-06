@@ -18,7 +18,7 @@ import { StepProgressBar } from './components/StepProgressBar';
 import { DatePageStep, DateDetails } from './types';
 import { Heart, RotateCcw } from 'lucide-react';
 
-const STORAGE_KEY = 'romantic_date_invitation_v4';
+const STORAGE_KEY = 'romantic_date_invitation_v5';
 
 function getUpcomingWeekend() {
   const today = new Date();
@@ -34,7 +34,7 @@ const DEFAULT_DETAILS: DateDetails = {
   date: getUpcomingWeekend(),
   timeSlot: 'dinner',
   customTime: '7:00 PM',
-  selectedFoods: ['ghana-jollof', 'fufu-soup'],
+  selectedFoods: [],
   customFoodNote: '',
   place: 'Skybar 25 Rooftop',
   placeNote: '',
@@ -337,7 +337,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* Page 7: Separate Page for "$499 Date Agreement" Joke Fee */}
+          {/* Page 7: Separate Page for "GH₵ 499 Date Agreement" Joke Fee */}
           {currentStep === 'paywall' && (
             <motion.div
               key="paywall-page"
