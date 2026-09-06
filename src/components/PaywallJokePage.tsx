@@ -40,13 +40,7 @@ export const PaywallJokePage: React.FC<PaywallJokePageProps> = ({
 
   return (
     <div className="relative w-full max-w-lg mx-auto px-3 sm:px-4 py-2 sm:py-6 md:py-8 z-10">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: -20 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white/95 backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[44px] p-6 sm:p-9 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-6"
-      >
+      <div className="bg-white/95 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[44px] p-6 sm:p-9 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-6">
         {/* Credit Card Icon */}
         <div className="w-14 h-11 sm:w-16 sm:h-12 rounded-xl bg-gradient-to-tr from-amber-200 via-amber-100 to-yellow-200 border border-amber-300 shadow-sm flex items-center justify-center text-xl sm:text-2xl select-none">
           💳
@@ -100,7 +94,7 @@ export const PaywallJokePage: React.FC<PaywallJokePageProps> = ({
             go back
           </button>
         </div>
-      </motion.div>
+      </div>
 
       {/* Discount / Joke Popup Modal */}
       <AnimatePresence>

@@ -15,13 +15,7 @@ export const LetterPage: React.FC<LetterPageProps> = ({
 }) => {
   return (
     <div className="relative w-full max-w-xl mx-auto px-3 sm:px-4 py-2 sm:py-6 md:py-8 z-10">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: -20 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white/95 backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[44px] p-6 sm:p-10 md:p-12 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-6 sm:gap-7"
-      >
+      <div className="bg-white/95 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[44px] p-6 sm:p-10 md:p-12 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-6 sm:gap-7">
         <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-rose-50 border border-rose-100 flex items-center justify-center text-2xl sm:text-3xl shadow-xs">
           🚗
         </div>
@@ -62,7 +56,7 @@ export const LetterPage: React.FC<LetterPageProps> = ({
             <span>ok I accept 💖</span>
           </motion.button>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

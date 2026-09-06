@@ -133,6 +133,15 @@ export const FOOD_ITEMS: FoodItem[] = [
   },
 ];
 
+export const PLACE_SUGGESTIONS = [
+  { id: 'skybar', name: 'Skybar 25 Rooftop', emoji: '🍸', desc: 'Stunning city views, night lights & cocktails' },
+  { id: 'santoku', name: 'Santoku Fine Dining', emoji: '🍣', desc: 'World-class cuisine, luxury ambiance & candlelight' },
+  { id: 'buka', name: 'Buka Restaurant / Cozy Spot', emoji: '🥘', desc: 'Warm traditional setting with legendary Ghanaian dishes' },
+  { id: 'beachside', name: 'Beachfront Sunset Dinner', emoji: '🌅', desc: 'Ocean waves, sea breeze & candlelit table' },
+  { id: 'cozy-cafe', name: 'Artisan Cafe & Sweet Dessert', emoji: '☕', desc: 'Charming nook for quiet laughter and sweet pastries' },
+  { id: 'surprise', name: 'Surprise Me! (Anywhere with you)', emoji: '✨', desc: 'You choose, I trust you completely 💕' },
+];
+
 export const VIBE_OPTIONS = [
   { id: 'romantic', title: 'Cozy & Romantic', emoji: '🌹', desc: 'Candlelight, soft background music, deep talks' },
   { id: 'fancy', title: 'Dressed Up & Glam', emoji: '💃', desc: 'High heels, stunning dress, fancy venue & photos' },

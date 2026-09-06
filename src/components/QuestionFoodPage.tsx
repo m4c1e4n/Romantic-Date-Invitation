@@ -30,13 +30,7 @@ export const QuestionFoodPage: React.FC<QuestionFoodPageProps> = ({
 
   return (
     <div className="relative w-full max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-6 md:py-8 z-10">
-      <motion.div
-        initial={{ opacity: 0, x: 25 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -25 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white/95 backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-4 sm:p-7 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] space-y-4 sm:space-y-6"
-      >
+      <div className="bg-white/95 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-4 sm:p-7 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] space-y-4 sm:space-y-6">
         {/* Header Question */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rose-100/80 pb-4 sm:pb-5">
           <div>
@@ -179,7 +173,7 @@ export const QuestionFoodPage: React.FC<QuestionFoodPageProps> = ({
             </motion.button>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

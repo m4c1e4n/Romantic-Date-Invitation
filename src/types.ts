@@ -3,7 +3,7 @@ export type DatePageStep =
   | 'celebration'
   | 'question-day'
   | 'question-food'
-  | 'question-vibe'
+  | 'question-place'
   | 'letter'
   | 'paywall'
   | 'ticket';
@@ -26,8 +26,10 @@ export interface DateDetails {
   customTime: string;
   selectedFoods: string[];
   customFoodNote?: string;
-  vibe: string;
-  sweetAddOns: string[];
-  noteForHim: string;
+  place: string;
+  placeNote?: string;
+  vibe?: string;
+  sweetAddOns?: string[];
+  noteForHim?: string;
 }
 

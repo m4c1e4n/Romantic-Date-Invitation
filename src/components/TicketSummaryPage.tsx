@@ -11,14 +11,15 @@ import {
   Copy, 
   Check, 
   RotateCcw,
-  Edit3
+  Edit3,
+  MapPin
 } from 'lucide-react';
 import { DateDetails } from '../types';
-import { FOOD_ITEMS, VIBE_OPTIONS, SWEET_ADDONS } from '../data/foodItems';
+import { FOOD_ITEMS } from '../data/foodItems';
 
 interface TicketSummaryPageProps {
   details: DateDetails;
-  onEditStep: (step: 'question-day' | 'question-food' | 'question-vibe') => void;
+  onEditStep: (step: 'question-day' | 'question-food' | 'question-place') => void;
   onReset: () => void;
 }
 
@@ -39,20 +40,12 @@ export const TicketSummaryPage: React.FC<TicketSummaryPageProps> = ({
     .map((f) => `${f.emoji} ${f.name}`)
     .join(', ');
 
-  const selectedVibeObj = VIBE_OPTIONS.find((v) => v.id === details.vibe);
-
-  const selectedAddonNames = details.sweetAddOns
-    .map((id) => SWEET_ADDONS.find((a) => a.id === id)?.title)
-    .filter(Boolean)
-    .join(', ');
-
   const summaryText = `🌹 Official Date Confirmation! 🌹
 Hey handsome, I said YES to our date! Here is what I picked:
 📅 Date: ${details.date}
 ⏰ Time: ${timeDisplay}
 🍲 Food Menu: ${selectedFoodNames || 'Surprise me!'} ${details.customFoodNote ? `(Craving notes: ${details.customFoodNote})` : ''}
-✨ Vibe: ${selectedVibeObj?.emoji || '🌹'} ${selectedVibeObj?.title || 'Romantic'}
-🎁 Special Touches: ${selectedAddonNames || 'Just your sweet self'}
+📍 Place: ${details.place || 'Surprise me! (Anywhere with you)'} ${details.placeNote ? `(Special requests: ${details.placeNote})` : ''}
 ${details.noteForHim ? `💌 Note for you: "${details.noteForHim}"` : ''}
 
 I can't wait! See you soon 😘❤️`;
@@ -71,13 +64,7 @@ I can't wait! See you soon 😘❤️`;
 
   return (
     <div className="relative w-full max-w-3xl mx-auto px-3 sm:px-4 py-2 sm:py-6 md:py-8 z-10">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: -20 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="space-y-4 sm:space-y-6"
-      >
+      <div className="space-y-4 sm:space-y-6">
         {/* Cute Boarding Pass / Ticket */}
         <div className="relative rounded-[28px] sm:rounded-[36px] md:rounded-[48px] bg-gradient-to-br from-rose-50 via-white to-amber-50/40 border-2 border-rose-200 shadow-[0_20px_50px_rgba(251,113,133,0.18)] overflow-hidden p-4 sm:p-7 md:p-10">
           {/* Decorative ticket side cutouts */}
@@ -147,19 +134,24 @@ I can't wait! See you soon 😘❤️`;
             <div className="bg-white/90 p-3.5 sm:p-4 rounded-2xl border border-rose-100 flex flex-col justify-between">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Vibe &amp; Mood
+                  Date Destination 📍
                 </span>
                 <div className="text-sm sm:text-base font-extrabold text-slate-800 mt-1 flex items-center gap-1.5">
-                  <span className="shrink-0">{selectedVibeObj?.emoji || '🌹'}</span>
-                  <span className="truncate">{selectedVibeObj?.title || 'Cozy & Romantic'}</span>
+                  <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span className="truncate">{details.place || 'Surprise me! 💕'}</span>
                 </div>
+                {details.placeNote && (
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                    &ldquo;{details.placeNote}&rdquo;
+                  </p>
+                )}
               </div>
               <button
-                onClick={() => onEditStep('question-vibe')}
+                onClick={() => onEditStep('question-place')}
                 className="mt-2 text-[11px] text-rose-500 hover:text-rose-700 font-semibold inline-flex items-center gap-1 cursor-pointer self-start min-h-[36px] py-1 active:scale-95 touch-manipulation"
               >
                 <Edit3 className="w-3 h-3" />
-                <span>Change vibe</span>
+                <span>Change place</span>
               </button>
             </div>
           </div>
@@ -205,12 +197,12 @@ I can't wait! See you soon 😘❤️`;
             )}
           </div>
 
-          {/* Sweet Addons & Notes */}
-          {(details.sweetAddOns.length > 0 || details.noteForHim) && (
+          {/* Place Requests & Notes */}
+          {(details.placeNote || details.noteForHim) && (
             <div className="text-xs text-slate-600 space-y-2 bg-rose-50/70 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-rose-100 mb-4 sm:mb-5">
-              {details.sweetAddOns.length > 0 && (
+              {details.placeNote && (
                 <p>
-                  <strong className="text-slate-800">Sweet Extras:</strong> {selectedAddonNames}
+                  <strong className="text-slate-800">Place requests &amp; vibe:</strong> {details.placeNote}
                 </p>
               )}
               {details.noteForHim && (
@@ -274,7 +266,7 @@ I can't wait! See you soon 😘❤️`;
             <span>Start Over / Change Everything</span>
           </button>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

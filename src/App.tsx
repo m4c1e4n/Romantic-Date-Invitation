@@ -10,7 +10,7 @@ import { HeroProposal } from './components/HeroProposal';
 import { CelebrationPage } from './components/CelebrationPage';
 import { QuestionDayPage } from './components/QuestionDayPage';
 import { QuestionFoodPage } from './components/QuestionFoodPage';
-import { QuestionVibePage } from './components/QuestionVibePage';
+import { QuestionPlacePage } from './components/QuestionPlacePage';
 import { LetterPage } from './components/LetterPage';
 import { PaywallJokePage } from './components/PaywallJokePage';
 import { TicketSummaryPage } from './components/TicketSummaryPage';
@@ -18,7 +18,7 @@ import { StepProgressBar } from './components/StepProgressBar';
 import { DatePageStep, DateDetails } from './types';
 import { Heart, RotateCcw } from 'lucide-react';
 
-const STORAGE_KEY = 'romantic_date_invitation_v3';
+const STORAGE_KEY = 'romantic_date_invitation_v4';
 
 function getUpcomingWeekend() {
   const today = new Date();
@@ -36,8 +36,8 @@ const DEFAULT_DETAILS: DateDetails = {
   customTime: '7:00 PM',
   selectedFoods: ['ghana-jollof', 'fufu-soup'],
   customFoodNote: '',
-  vibe: 'romantic',
-  sweetAddOns: ['flowers', 'dessert'],
+  place: 'Skybar 25 Rooftop',
+  placeNote: '',
   noteForHim: '',
 };
 
@@ -52,7 +52,13 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.currentStep) {
-          setCurrentStep(parsed.currentStep === 'question-time' ? 'question-day' : parsed.currentStep);
+          const mappedStep =
+            parsed.currentStep === 'question-time'
+              ? 'question-day'
+              : parsed.currentStep === 'question-vibe'
+              ? 'question-place'
+              : parsed.currentStep;
+          setCurrentStep(mappedStep);
         }
         if (parsed.details) {
           setDetails((prev) => ({ ...prev, ...parsed.details }));
@@ -127,22 +133,19 @@ export default function App() {
     });
   };
 
-  const handleChangeVibe = (vibeId: string) => {
+  const handleChangePlace = (place: string) => {
     setDetails((prev) => {
-      const next = { ...prev, vibe: vibeId };
+      const next = { ...prev, place };
       saveState(currentStep, next);
       return next;
     });
   };
 
-  const handleToggleAddon = (addonId: string) => {
+  const handleChangePlaceNote = (note: string) => {
     setDetails((prev) => {
-      const updatedAddons = prev.sweetAddOns.includes(addonId)
-        ? prev.sweetAddOns.filter((id) => id !== addonId)
-        : [...prev.sweetAddOns, addonId];
-      const nextDetails = { ...prev, sweetAddOns: updatedAddons };
-      saveState(currentStep, nextDetails);
-      return nextDetails;
+      const next = { ...prev, placeNote: note };
+      saveState(currentStep, next);
+      return next;
     });
   };
 
@@ -224,10 +227,10 @@ export default function App() {
           {currentStep === 'proposal' && (
             <motion.div
               key="proposal-page"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
               <HeroProposal onAccept={handleProposalAccepted} />
@@ -238,10 +241,10 @@ export default function App() {
           {currentStep === 'celebration' && (
             <motion.div
               key="celebration-page"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
               <CelebrationPage
@@ -255,10 +258,10 @@ export default function App() {
           {currentStep === 'question-day' && (
             <motion.div
               key="question-day-page"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
               <QuestionDayPage
@@ -278,10 +281,10 @@ export default function App() {
           {currentStep === 'question-food' && (
             <motion.div
               key="question-food-page"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
               <QuestionFoodPage
@@ -289,30 +292,28 @@ export default function App() {
                 customFoodNote={details.customFoodNote}
                 onToggleFood={handleToggleFood}
                 onChangeCustomFoodNote={handleChangeCustomFoodNote}
-                onNext={() => goToStep('question-vibe')}
+                onNext={() => goToStep('question-place')}
                 onBack={() => goToStep('question-day')}
               />
             </motion.div>
           )}
 
-          {/* Page 5: Separate Page for ATMOSPHERE & VIBES */}
-          {currentStep === 'question-vibe' && (
+          {/* Page 5: Separate Page for PICK A PLACE */}
+          {currentStep === 'question-place' && (
             <motion.div
-              key="question-vibe-page"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.35 }}
+              key="question-place-page"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
-              <QuestionVibePage
-                vibe={details.vibe}
-                sweetAddOns={details.sweetAddOns}
-                noteForHim={details.noteForHim}
-                onChangeVibe={handleChangeVibe}
-                onToggleAddon={handleToggleAddon}
-                onChangeNoteForHim={handleChangeNoteForHim}
-                onConfirmAndGenerateTicket={() => goToStep('letter')}
+              <QuestionPlacePage
+                place={details.place}
+                placeNote={details.placeNote}
+                onChangePlace={handleChangePlace}
+                onChangePlaceNote={handleChangePlaceNote}
+                onConfirmAndProceed={() => goToStep('letter')}
                 onBack={() => goToStep('question-food')}
               />
             </motion.div>
@@ -322,16 +323,16 @@ export default function App() {
           {currentStep === 'letter' && (
             <motion.div
               key="letter-page"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
               <LetterPage
                 timeDisplay={timeDisplay}
                 onNext={() => goToStep('paywall')}
-                onBack={() => goToStep('question-vibe')}
+                onBack={() => goToStep('question-place')}
               />
             </motion.div>
           )}
@@ -340,10 +341,10 @@ export default function App() {
           {currentStep === 'paywall' && (
             <motion.div
               key="paywall-page"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
               <PaywallJokePage
@@ -357,10 +358,10 @@ export default function App() {
           {currentStep === 'ticket' && (
             <motion.div
               key="ticket-page"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className="w-full"
             >
               <TicketSummaryPage
@@ -374,8 +375,13 @@ export default function App() {
       </main>
 
       {/* Bottom Romantic Footer */}
-      <footer className="relative z-20 w-full text-center py-5 px-4 text-slate-400 text-[11px] font-medium tracking-widest uppercase flex items-center justify-center gap-1.5">
-        <span>Designed with love just for you</span>
+      <footer id="app-footer" className="relative z-20 w-full text-center py-5 px-4 flex flex-col items-center justify-center gap-1">
+        <span className="text-slate-400 text-[11px] font-medium tracking-widest uppercase">
+          Designed with love just for you
+        </span>
+        <span className="text-rose-500 font-medium text-xs sm:text-sm tracking-wide flex items-center justify-center gap-1.5">
+          ❤️ Stephanie Akowuah ❤️
+        </span>
       </footer>
     </div>
   );

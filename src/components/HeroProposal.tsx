@@ -23,6 +23,8 @@ const DODGE_PHRASES = [
 export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
   const [dodgeCount, setDodgeCount] = useState(0);
   const [buttonPos, setButtonPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const buttonPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  buttonPosRef.current = buttonPos;
   const [currentPhrase, setCurrentPhrase] = useState<string>('');
   const [hasMoved, setHasMoved] = useState(false);
   const arenaRef = useRef<HTMLDivElement>(null);
@@ -34,6 +36,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     width: number;
     height: number;
   } | null>(null);
+  const arenaRectRef = useRef<DOMRect | null>(null);
 
   // Compute or retrieve natural unshifted center of button relative to arena
   const getNaturalPos = () => {
@@ -44,10 +47,11 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
 
     const arenaRect = arena.getBoundingClientRect();
     const btnRect = btn.getBoundingClientRect();
+    arenaRectRef.current = arenaRect;
 
     // Subtract current buttonPos in case it's called after initial movement
-    const centerX = btnRect.left + btnRect.width / 2 - arenaRect.left - buttonPos.x;
-    const centerY = btnRect.top + btnRect.height / 2 - arenaRect.top - buttonPos.y;
+    const centerX = btnRect.left + btnRect.width / 2 - arenaRect.left - buttonPosRef.current.x;
+    const centerY = btnRect.top + btnRect.height / 2 - arenaRect.top - buttonPosRef.current.y;
 
     const natural = {
       centerX,
@@ -59,20 +63,28 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     return natural;
   };
 
-  // Reset natural position cache on window resize
+  const updateArenaRect = () => {
+    naturalPosRef.current = null;
+    if (arenaRef.current) {
+      arenaRectRef.current = arenaRef.current.getBoundingClientRect();
+    }
+  };
+
+  // Reset natural position cache on window resize and scroll
   useEffect(() => {
-    const handleResize = () => {
-      naturalPosRef.current = null;
+    window.addEventListener('resize', updateArenaRect, { passive: true });
+    window.addEventListener('scroll', updateArenaRect, { passive: true });
+    return () => {
+      window.removeEventListener('resize', updateArenaRect);
+      window.removeEventListener('scroll', updateArenaRect);
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Trigger runaway movement away from cursor, guaranteed to stay 100% inside arena
   const handleDodge = (cursorX?: number, cursorY?: number) => {
-    const now = Date.now();
-    // 70ms cooldown ensures quick, repeated dodges when being actively chased
-    if (now - lastDodgeTime.current < 70) return;
+    const now = performance.now();
+    // 160ms cooldown ensures smooth, playful evasions without jerky cutting-off
+    if (now - lastDodgeTime.current < 160) return;
     lastDodgeTime.current = now;
 
     playDodgeSound();
@@ -81,22 +93,20 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     const nextPhrase = DODGE_PHRASES[dodgeCount % DODGE_PHRASES.length];
     setCurrentPhrase(nextPhrase);
 
-    const arena = arenaRef.current;
     const natural = getNaturalPos();
+    const arenaRect = arenaRectRef.current || arenaRef.current?.getBoundingClientRect();
 
-    if (arena && natural) {
-      const arenaRect = arena.getBoundingClientRect();
-
+    if (arenaRect && natural) {
       // Strict boundaries inside arena so the button is NEVER clipped or outside
-      const pad = 14;
+      const pad = 12;
       const minCenterInArenaX = natural.width / 2 + pad;
       const maxCenterInArenaX = arenaRect.width - natural.width / 2 - pad;
       const minCenterInArenaY = natural.height / 2 + pad;
       const maxCenterInArenaY = arenaRect.height - natural.height / 2 - pad;
 
       // Current center coordinates
-      const currentCenterXInArena = natural.centerX + buttonPos.x;
-      const currentCenterYInArena = natural.centerY + buttonPos.y;
+      const currentCenterXInArena = natural.centerX + buttonPosRef.current.x;
+      const currentCenterYInArena = natural.centerY + buttonPosRef.current.y;
       const currentViewportCenterX = arenaRect.left + currentCenterXInArena;
       const currentViewportCenterY = arenaRect.top + currentCenterYInArena;
 
@@ -104,189 +114,139 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
       const targetCursorX = cursorX ?? currentViewportCenterX;
       const targetCursorY = cursorY ?? currentViewportCenterY;
 
-      // Avoid landing right on top of YES button
+      // Fast vector evasion away from cursor
+      let dirX = currentViewportCenterX - targetCursorX;
+      let dirY = currentViewportCenterY - targetCursorY;
+      let dist = Math.hypot(dirX, dirY);
+
+      if (dist < 1) {
+        dirX = (Math.random() - 0.5) * 2;
+        dirY = (Math.random() - 0.5) * 2;
+        dist = Math.hypot(dirX, dirY) || 1;
+      }
+
+      // Add a slight playful angle jitter (+-40 deg)
+      const baseAngle = Math.atan2(dirY, dirX);
+      const jitterAngle = baseAngle + (Math.random() - 0.5) * 0.8;
+      const jumpDistance = Math.random() * 50 + 110; // 110px - 160px leap
+
+      let targetCenterInArenaX = currentCenterXInArena + Math.cos(jitterAngle) * jumpDistance;
+      let targetCenterInArenaY = currentCenterYInArena + Math.sin(jitterAngle) * jumpDistance;
+
+      // If escaping towards YES button or out of bounds, reflect away
       const yesBtn = document.getElementById('btn-say-yes');
       const yesRect = yesBtn?.getBoundingClientRect();
-
-      // Divide arena into a 6x4 candidate grid
-      interface Candidate {
-        candXInArena: number;
-        candYInArena: number;
-        score: number;
-      }
-      const candidates: Candidate[] = [];
-
-      for (let col = 0; col < 6; col++) {
-        for (let row = 0; row < 4; row++) {
-          const candCenterInArenaX =
-            minCenterInArenaX + (col / 5) * (maxCenterInArenaX - minCenterInArenaX);
-          const candCenterInArenaY =
-            minCenterInArenaY + (row / 3) * (maxCenterInArenaY - minCenterInArenaY);
-
-          const candViewportX = arenaRect.left + candCenterInArenaX;
-          const candViewportY = arenaRect.top + candCenterInArenaY;
-
-          const distToCursor = Math.hypot(
-            candViewportX - targetCursorX,
-            candViewportY - targetCursorY
-          );
-          const distFromCurrent = Math.hypot(
-            candCenterInArenaX - currentCenterXInArena,
-            candCenterInArenaY - currentCenterYInArena
-          );
-
-          let overlapPenalty = 0;
-          if (yesRect) {
-            const yesCenterX = yesRect.left + yesRect.width / 2;
-            const yesCenterY = yesRect.top + yesRect.height / 2;
-            const distToYes = Math.hypot(candViewportX - yesCenterX, candViewportY - yesCenterY);
-            if (distToYes < (yesRect.width + natural.width) / 2 + 10) {
-              overlapPenalty = 400;
-            }
-          }
-
-          // Prioritize points furthest from the incoming cursor
-          const score = distToCursor * 2.5 + Math.min(distFromCurrent, 180) - overlapPenalty;
-          candidates.push({
-            candXInArena: candCenterInArenaX,
-            candYInArena: candCenterInArenaY,
-            score,
-          });
+      if (yesRect) {
+        const yesCenterXInArena = yesRect.left + yesRect.width / 2 - arenaRect.left;
+        const yesCenterYInArena = yesRect.top + yesRect.height / 2 - arenaRect.top;
+        const distToYes = Math.hypot(targetCenterInArenaX - yesCenterXInArena, targetCenterInArenaY - yesCenterYInArena);
+        if (distToYes < (yesRect.width + natural.width) / 2 + 15) {
+          targetCenterInArenaX += targetCenterInArenaX > yesCenterXInArena ? 80 : -80;
+          targetCenterInArenaY += targetCenterInArenaY > yesCenterYInArena ? 50 : -50;
         }
       }
 
-      // Sort by score descending
-      candidates.sort((a, b) => b.score - a.score);
+      // Strict boundary clamp so button stays 100% inside arena
+      const clampedCenterX = Math.max(minCenterInArenaX, Math.min(maxCenterInArenaX, targetCenterInArenaX));
+      const clampedCenterY = Math.max(minCenterInArenaY, Math.min(maxCenterInArenaY, targetCenterInArenaY));
 
-      // Pick among top 3 best points for organic playful variety
-      const topCandidates = candidates.slice(0, 3);
-      const chosen =
-        topCandidates[Math.floor(Math.random() * topCandidates.length)] || candidates[0];
+      const targetX = clampedCenterX - natural.centerX;
+      const targetY = clampedCenterY - natural.centerY;
 
-      // Calculate bounded relative offsets (x, y)
-      const targetX = chosen.candXInArena - natural.centerX;
-      const targetY = chosen.candYInArena - natural.centerY;
-
-      const minX = minCenterInArenaX - natural.centerX;
-      const maxX = maxCenterInArenaX - natural.centerX;
-      const minY = minCenterInArenaY - natural.centerY;
-      const maxY = maxCenterInArenaY - natural.centerY;
-
-      const clampedX = Math.max(minX, Math.min(maxX, targetX));
-      const clampedY = Math.max(minY, Math.min(maxY, targetY));
-
-      setButtonPos({ x: clampedX, y: clampedY });
+      buttonPosRef.current = { x: targetX, y: targetY };
+      setButtonPos({ x: targetX, y: targetY });
       setHasMoved(true);
     } else {
-      setButtonPos({
-        x: (Math.random() * 2 - 1) * 60,
-        y: (Math.random() * 2 - 1) * 35,
-      });
+      const fallbackX = (Math.random() * 2 - 1) * 70;
+      const fallbackY = (Math.random() * 2 - 1) * 40;
+      buttonPosRef.current = { x: fallbackX, y: fallbackY };
+      setButtonPos({ x: fallbackX, y: fallbackY });
       setHasMoved(true);
     }
   };
 
-  // Active cursor proximity sensor: proactively flees whenever the cursor approaches
+  // Active cursor proximity sensor: stable listeners with no thrashing or re-registration
   useEffect(() => {
-    const checkProximity = (clientX: number, clientY: number) => {
-      const arena = arenaRef.current;
+    let rafId: number | null = null;
+    let lastEvent: { clientX: number; clientY: number } | null = null;
+
+    const evaluateProximity = () => {
+      if (!lastEvent) {
+        rafId = null;
+        return;
+      }
+
       const natural = getNaturalPos();
-      if (!arena || !natural) return;
-
-      const arenaRect = arena.getBoundingClientRect();
-
-      // Compute target position in viewport
-      const btnTargetViewportX = arenaRect.left + natural.centerX + buttonPos.x;
-      const btnTargetViewportY = arenaRect.top + natural.centerY + buttonPos.y;
-
-      // Also check current DOM render position
-      const btn = buttonRef.current;
-      let btnCurrentViewportX = btnTargetViewportX;
-      let btnCurrentViewportY = btnTargetViewportY;
-
-      if (btn) {
-        const btnRect = btn.getBoundingClientRect();
-        btnCurrentViewportX = btnRect.left + btnRect.width / 2;
-        btnCurrentViewportY = btnRect.top + btnRect.height / 2;
+      const arenaRect = arenaRectRef.current || arenaRef.current?.getBoundingClientRect();
+      if (!arenaRect || !natural) {
+        rafId = null;
+        return;
       }
 
-      const distToCurrent = Math.hypot(
-        clientX - btnCurrentViewportX,
-        clientY - btnCurrentViewportY
-      );
-      const distToTarget = Math.hypot(
-        clientX - btnTargetViewportX,
-        clientY - btnTargetViewportY
-      );
-      const minDistance = Math.min(distToCurrent, distToTarget);
+      const currentCenterX = arenaRect.left + natural.centerX + buttonPosRef.current.x;
+      const currentCenterY = arenaRect.top + natural.centerY + buttonPosRef.current.y;
 
-      // Distance bubble: 95px on desktop/tablet, 75px on mobile
-      const threshold = window.innerWidth < 640 ? 75 : 95;
+      const dist = Math.hypot(
+        lastEvent.clientX - currentCenterX,
+        lastEvent.clientY - currentCenterY
+      );
 
-      if (minDistance < threshold) {
-        handleDodge(clientX, clientY);
+      // Distance bubble: 85px on desktop, 65px on mobile
+      const threshold = window.innerWidth < 640 ? 65 : 85;
+
+      if (dist < threshold) {
+        handleDodge(lastEvent.clientX, lastEvent.clientY);
       }
+
+      lastEvent = null;
+      rafId = null;
     };
 
-    const handlePointerMove = (e: PointerEvent | MouseEvent) => {
-      checkProximity(e.clientX, e.clientY);
+    const handlePointerMove = (e: PointerEvent) => {
+      lastEvent = { clientX: e.clientX, clientY: e.clientY };
+      if (rafId === null) {
+        rafId = requestAnimationFrame(evaluateProximity);
+      }
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length > 0) {
-        checkProximity(e.touches[0].clientX, e.touches[0].clientY);
+        lastEvent = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+        if (rafId === null) {
+          rafId = requestAnimationFrame(evaluateProximity);
+        }
       }
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('mousemove', handlePointerMove, { passive: true });
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('mousemove', handlePointerMove);
       window.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [buttonPos, dodgeCount]);
+  }, []);
 
   const handleYesClick = () => {
-    // 1. Play sound
     playCelebrationSound();
 
-    // 2. Multi-stage confetti & heart explosion
-    const end = Date.now() + 2.5 * 1000;
-    const colors = ['#f43f5e', '#ec4899', '#f59e0b', '#fb7185', '#e11d48'];
-
-    (function frame() {
-      confetti({
-        particleCount: 7,
-        angle: 60,
-        spread: 70,
-        origin: { x: 0, y: 0.7 },
-        colors,
-      });
-      confetti({
-        particleCount: 7,
-        angle: 120,
-        spread: 70,
-        origin: { x: 1, y: 0.7 },
-        colors,
-      });
-
-      if (Date.now() < end) {
-        requestAnimationFrame(frame);
-      }
-    })();
-
-    // Center burst
+    // Instant, lightweight celebratory confetti bursts
     confetti({
-      particleCount: 90,
-      spread: 100,
-      origin: { y: 0.6 },
-      colors,
+      particleCount: 45,
+      spread: 70,
+      origin: { x: 0.35, y: 0.6 },
+      colors: ['#f43f5e', '#ec4899', '#f59e0b', '#fb7185'],
+      disableForReducedMotion: true,
+    });
+    confetti({
+      particleCount: 45,
+      spread: 70,
+      origin: { x: 0.65, y: 0.6 },
+      colors: ['#f43f5e', '#ec4899', '#f59e0b', '#fb7185'],
+      disableForReducedMotion: true,
     });
 
-    // 3. Trigger callback
     onAccept();
   };
 
@@ -295,12 +255,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
 
   return (
     <div className="relative w-full max-w-3xl mx-auto px-3 sm:px-4 py-2 sm:py-6 md:py-8 z-10">
-      <motion.div
-        initial={{ opacity: 0, y: 25, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white/90 backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-5 sm:p-8 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-7 overflow-hidden"
-      >
+      <div className="bg-white/95 sm:bg-white/90 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-5 sm:p-8 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-7 overflow-hidden">
         {/* Cute puppy avatar matching viral video */}
         <div className="relative">
           <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl sm:rounded-3xl overflow-hidden border-2 sm:border-3 border-rose-200 shadow-md bg-rose-100 flex items-center justify-center text-4xl sm:text-5xl select-none">
@@ -348,31 +303,27 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
           className="relative min-h-[185px] sm:min-h-[210px] md:min-h-[230px] w-full flex items-center justify-center gap-4 sm:gap-6 p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-rose-50/40 border border-rose-100/60"
         >
           {/* YES Button */}
-          <motion.button
+          <button
             id="btn-say-yes"
             onClick={handleYesClick}
-            animate={{ scale: yesScale }}
-            whileHover={{ scale: yesScale * 1.05 }}
-            whileTap={{ scale: yesScale * 0.95 }}
-            transition={{ type: "spring", stiffness: 400, damping: 17 }}
-            className="relative z-20 cursor-pointer bg-[#F06292] hover:bg-[#E91E63] text-white font-bold px-7 py-3.5 sm:px-10 sm:py-4 md:px-12 md:py-5 min-h-[48px] sm:min-h-[54px] rounded-[22px] sm:rounded-[24px] shadow-lg shadow-rose-200 text-lg sm:text-xl md:text-2xl transition-all flex items-center justify-center gap-2 active:scale-95 touch-manipulation"
+            style={{
+              transform: `scale(${yesScale})`,
+              transition: 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              willChange: 'transform',
+            }}
+            className="relative z-20 cursor-pointer bg-[#F06292] hover:bg-[#E91E63] text-white font-bold px-7 py-3.5 sm:px-10 sm:py-4 md:px-12 md:py-5 min-h-[48px] sm:min-h-[54px] rounded-[22px] sm:rounded-[24px] shadow-lg shadow-rose-200 text-lg sm:text-xl md:text-2xl flex items-center justify-center gap-2 active:scale-95 touch-manipulation transform-gpu"
           >
             <span>YES ♥</span>
-          </motion.button>
+          </button>
 
           {/* NO Button (Evasive Runaway: Outruns Cursor Instantly!) */}
-          <motion.div
+          <div
             id="btn-say-no-container"
-            className="relative z-10 touch-manipulation"
-            animate={{
-              x: buttonPos.x,
-              y: buttonPos.y,
-            }}
-            transition={{
-              type: "spring",
-              stiffness: 750,
-              damping: 24,
-              mass: 0.45,
+            className="relative z-10 touch-manipulation transform-gpu"
+            style={{
+              transform: `translate3d(${buttonPos.x}px, ${buttonPos.y}px, 0)`,
+              transition: hasMoved ? 'transform 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.15)' : 'none',
+              willChange: 'transform',
             }}
           >
             <div className="relative">
@@ -419,7 +370,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
                 </span>
               )}
             </div>
-          </motion.div>
+          </div>
         </div>
 
         {/* Counter of escape attempts if she tried to click No */}
@@ -434,7 +385,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
             <span className="font-semibold text-slate-600">Success rate: 0.0% 😉</span>
           </motion.p>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 };

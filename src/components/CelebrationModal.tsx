@@ -76,7 +76,7 @@ export const CelebrationModal: React.FC<CelebrationModalProps> = ({ onContinue }
           <p className="flex items-start gap-2">
             <span className="text-rose-500 shrink-0 mt-0.5">🇬🇭</span>
             <span>
-              Now comes the best part: <strong className="text-slate-800">You are the queen today</strong>. Pick our date &amp; time, your favorite foods (authentic Ghanaian dishes like Fufu, Ghana Jollof, Yam &amp; Garden Egg, Check-Check, or fancy continental classics), and the overall vibe!
+              Now comes the best part: <strong className="text-slate-800">You are the queen today</strong>. Pick our date &amp; time, your favorite foods (authentic Ghanaian dishes like Fufu, Ghana Jollof, Yam &amp; Garden Egg, Check-Check, or fancy continental classics), and the place you want to go!
             </span>
           </p>
           <p className="flex items-start gap-2">

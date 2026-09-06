@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Utensils, Sparkles, Ticket } from 'lucide-react';
+import { Calendar, Utensils, MapPin, Ticket } from 'lucide-react';
 import { DatePageStep } from '../types';
 
 interface StepProgressBarProps {
@@ -10,7 +10,7 @@ interface StepProgressBarProps {
 const STEPS: { id: DatePageStep; label: string; number: string; icon: React.FC<{ className?: string }> }[] = [
   { id: 'question-day', label: 'Day & Time', number: '1', icon: Calendar },
   { id: 'question-food', label: 'Cravings', number: '2', icon: Utensils },
-  { id: 'question-vibe', label: 'Vibe', number: '3', icon: Sparkles },
+  { id: 'question-place', label: 'Place', number: '3', icon: MapPin },
   { id: 'ticket', label: 'VIP Pass', number: '4', icon: Ticket },
 ];
 
@@ -21,7 +21,7 @@ export const StepProgressBar: React.FC<StepProgressBarProps> = ({ currentStep, o
         return 0;
       case 'question-food':
         return 1;
-      case 'question-vibe':
+      case 'question-place':
         return 2;
       case 'letter':
       case 'paywall':
