@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { Heart, Sparkles, Smile, ShieldAlert } from 'lucide-react';
 import { playCelebrationSound, playDodgeSound } from '../utils/audio';
@@ -20,8 +20,12 @@ const DODGE_PHRASES = [
   "You're stuck with me forever anyway! 🥰",
 ];
 
+// Stable global counter ensuring messages sequence forward even across re-renders or layout events
+let globalDodgeSequence = 0;
+
 export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
   const [dodgeCount, setDodgeCount] = useState(0);
+  const dodgeCountRef = useRef<number>(0);
   const [buttonPos, setButtonPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const buttonPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   buttonPosRef.current = buttonPos;
@@ -64,14 +68,14 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
   };
 
   const updateArenaRect = () => {
-    naturalPosRef.current = null;
     if (arenaRef.current) {
       arenaRectRef.current = arenaRef.current.getBoundingClientRect();
     }
   };
 
-  // Reset natural position cache on window resize and scroll
+  // Keep arena rect fresh on resize/scroll without wiping button anchor geometry
   useEffect(() => {
+    updateArenaRect();
     window.addEventListener('resize', updateArenaRect, { passive: true });
     window.addEventListener('scroll', updateArenaRect, { passive: true });
     return () => {
@@ -80,17 +84,22 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     };
   }, []);
 
-  // Trigger runaway movement away from cursor/tap, guaranteed to move away and stay 100% inside card
-  const handleDodge = (cursorX?: number, cursorY?: number, isDirectAttempt = false) => {
+  // Trigger runaway movement away from cursor/tap, guaranteed to move away and advance message
+  const handleDodge = (cursorX?: number, cursorY?: number) => {
     const now = performance.now();
-    // Allow direct clicks/taps to always trigger evasion without debounce
-    if (!isDirectAttempt && now - lastDodgeTime.current < 90) return;
+    // 120ms debounce prevents multiple rapid touch/pointer events from a single tap
+    if (now - lastDodgeTime.current < 120) return;
     lastDodgeTime.current = now;
 
     playDodgeSound();
-    setDodgeCount((prev) => prev + 1);
 
-    const nextPhrase = DODGE_PHRASES[dodgeCount % DODGE_PHRASES.length];
+    dodgeCountRef.current += 1;
+    globalDodgeSequence += 1;
+    const newCount = dodgeCountRef.current;
+    setDodgeCount(newCount);
+
+    // Guaranteed to advance to the next phrase on every single tap/interaction
+    const nextPhrase = DODGE_PHRASES[(globalDodgeSequence - 1) % DODGE_PHRASES.length];
     setCurrentPhrase(nextPhrase);
 
     const natural = getNaturalPos();
@@ -276,7 +285,10 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     }
   };
 
-  // Active cursor proximity sensor: stable listeners with no thrashing or re-registration
+  const handleDodgeRef = useRef(handleDodge);
+  handleDodgeRef.current = handleDodge;
+
+  // Active cursor & touch proximity sensor: stable listeners with no thrashing
   useEffect(() => {
     let rafId: number | null = null;
     let lastEvent: { clientX: number; clientY: number } | null = null;
@@ -287,26 +299,26 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         return;
       }
 
-      const natural = getNaturalPos();
-      const arenaRect = arenaRectRef.current || arenaRef.current?.getBoundingClientRect();
-      if (!arenaRect || !natural) {
+      const btn = buttonRef.current;
+      if (!btn) {
         rafId = null;
         return;
       }
 
-      const currentCenterX = arenaRect.left + natural.centerX + buttonPosRef.current.x;
-      const currentCenterY = arenaRect.top + natural.centerY + buttonPosRef.current.y;
+      const btnRect = btn.getBoundingClientRect();
+      const currentCenterX = btnRect.left + btnRect.width / 2;
+      const currentCenterY = btnRect.top + btnRect.height / 2;
 
       const dist = Math.hypot(
         lastEvent.clientX - currentCenterX,
         lastEvent.clientY - currentCenterY
       );
 
-      // Distance bubble: 85px on desktop, 65px on mobile
+      // Distance bubble: 85px on desktop, 65px on mobile/tablet
       const threshold = window.innerWidth < 640 ? 65 : 85;
 
       if (dist < threshold) {
-        handleDodge(lastEvent.clientX, lastEvent.clientY);
+        handleDodgeRef.current(lastEvent.clientX, lastEvent.clientY);
       }
 
       lastEvent = null;
@@ -320,7 +332,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
       }
     };
 
-    const handleTouchMove = (e: TouchEvent) => {
+    const handleTouch = (e: TouchEvent) => {
       if (e.touches.length > 0) {
         lastEvent = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
         if (rafId === null) {
@@ -330,12 +342,14 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchmove', handleTouch, { passive: true });
+    window.addEventListener('touchstart', handleTouch, { passive: true });
 
     return () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchmove', handleTouch);
+      window.removeEventListener('touchstart', handleTouch);
     };
   }, []);
 
@@ -390,27 +404,27 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         </div>
 
         {/* Fun Teasing Message Banner when dodge happens */}
-        <div className="min-h-[36px] sm:min-h-[40px] flex items-center justify-center px-2">
-          <AnimatePresence mode="wait">
-            {currentPhrase ? (
-              <motion.div
-                data-text-zone="true"
-                key={dodgeCount}
-                initial={{ opacity: 0, y: -6, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 6, scale: 0.9 }}
-                className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-slate-800 text-white font-medium text-[11px] sm:text-xs shadow-sm max-w-[90vw] text-center"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-rose-300 shrink-0" />
-                <span>{currentPhrase}</span>
-              </motion.div>
-            ) : (
-              <span data-text-zone="true" className="text-[11px] sm:text-xs text-slate-400 font-medium tracking-wide flex items-center gap-1">
-                <span>P.S. There is really only one correct answer!</span>
-                <span>🌹</span>
-              </span>
-            )}
-          </AnimatePresence>
+        <div id="teasing-banner-container" className="min-h-[36px] sm:min-h-[40px] flex items-center justify-center px-2">
+          {currentPhrase ? (
+            <div
+              id="teasing-message-chip"
+              data-text-zone="true"
+              key={`phrase-${dodgeCount}`}
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-slate-800 text-white font-medium text-[11px] sm:text-xs shadow-sm max-w-[90vw] text-center transform-gpu transition-all duration-150 animate-in fade-in zoom-in-95"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-rose-300 shrink-0" />
+              <span id="teasing-message-text">{currentPhrase}</span>
+            </div>
+          ) : (
+            <span
+              id="teasing-initial-prompt"
+              data-text-zone="true"
+              className="text-[11px] sm:text-xs text-slate-400 font-medium tracking-wide flex items-center gap-1"
+            >
+              <span>P.S. There is really only one correct answer!</span>
+              <span>🌹</span>
+            </span>
+          )}
         </div>
 
         {/* Interactive Button Arena */}
@@ -455,30 +469,26 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
                   e.preventDefault();
                   e.stopPropagation();
                   const t = e.touches[0];
-                  if (t) {
-                    handleDodge(t.clientX, t.clientY, true);
-                  } else {
-                    handleDodge(undefined, undefined, true);
-                  }
+                  handleDodge(t ? t.clientX : undefined, t ? t.clientY : undefined);
                 }}
                 onPointerDown={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleDodge(e.clientX, e.clientY, true);
+                  handleDodge(e.clientX, e.clientY);
                 }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleDodge(e.clientX, e.clientY, true);
+                  handleDodge(e.clientX, e.clientY);
                 }}
                 onFocus={(e) => {
                   e.preventDefault();
-                  handleDodge(undefined, undefined, true);
+                  handleDodge();
                   document.getElementById('btn-say-yes')?.focus();
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  handleDodge(undefined, undefined, true);
+                  handleDodge();
                 }}
                 className="cursor-pointer bg-[#E2E8F0] text-slate-500 font-bold px-5 py-2.5 sm:px-7 sm:py-3.5 min-h-[44px] rounded-2xl text-xs sm:text-sm border-2 border-dashed border-slate-300 hover:bg-slate-300 transition-colors whitespace-nowrap active:scale-95 select-none flex items-center justify-center gap-1.5 touch-manipulation"
               >
