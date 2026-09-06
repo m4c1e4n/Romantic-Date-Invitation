@@ -97,14 +97,57 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
     const arenaRect = arenaRectRef.current || arenaRef.current?.getBoundingClientRect();
 
     if (arenaRect && natural) {
-      // Boundaries inside the entire bigger card
-      const pad = window.innerWidth < 640 ? 20 : 28;
-      const minCenterInArenaX = natural.width / 2 + pad;
-      const maxCenterInArenaX = arenaRect.width - natural.width / 2 - pad;
-      const minCenterInArenaY = natural.height / 2 + pad;
-      const maxCenterInArenaY = arenaRect.height - natural.height / 2 - pad;
+      // Inner padding of card
+      const pad = window.innerWidth < 640 ? 18 : 24;
 
-      // Current center coordinates inside the bigger card
+      // Button half-dimensions with safety margin (including top badge)
+      const btnHalfW = natural.width / 2 + 8;
+      const btnTopH = natural.height / 2 + 22; // extra room for "Can't catch me!" badge
+      const btnBottomH = natural.height / 2 + 8;
+
+      // Card bounding bounds
+      const minX = pad + btnHalfW;
+      const maxX = arenaRect.width - pad - btnHalfW;
+      const minY = pad + btnTopH;
+      const maxY = arenaRect.height - pad - btnBottomH;
+
+      // Collect all text and interactive obstacles to never cover
+      const obstacles: { left: number; right: number; top: number; bottom: number }[] = [];
+      const obstacleElements = arenaRef.current?.querySelectorAll('[data-text-zone="true"]');
+      if (obstacleElements) {
+        obstacleElements.forEach((el) => {
+          const r = el.getBoundingClientRect();
+          // Add 12px safety padding around all text/obstacles
+          obstacles.push({
+            left: r.left - arenaRect.left - 12,
+            right: r.right - arenaRect.left + 12,
+            top: r.top - arenaRect.top - 12,
+            bottom: r.bottom - arenaRect.top + 12,
+          });
+        });
+      }
+
+      // Check if candidate center position in arena coordinates is 100% clear of all text
+      const isPositionClear = (cx: number, cy: number): boolean => {
+        if (cx < minX || cx > maxX || cy < minY || cy > maxY) return false;
+        const bLeft = cx - btnHalfW;
+        const bRight = cx + btnHalfW;
+        const bTop = cy - btnTopH;
+        const bBottom = cy + btnBottomH;
+
+        for (const obs of obstacles) {
+          const overlaps = !(
+            bRight < obs.left ||
+            bLeft > obs.right ||
+            bBottom < obs.top ||
+            bTop > obs.bottom
+          );
+          if (overlaps) return false;
+        }
+        return true;
+      };
+
+      // Current center coordinates inside the card
       const currentCenterXInArena = natural.centerX + buttonPosRef.current.x;
       const currentCenterYInArena = natural.centerY + buttonPosRef.current.y;
       const currentViewportCenterX = arenaRect.left + currentCenterXInArena;
@@ -125,53 +168,87 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         dist = Math.hypot(dirX, dirY) || 1;
       }
 
-      // Add a slight playful angle jitter (+-45 deg)
       const baseAngle = Math.atan2(dirY, dirX);
-      const jitterAngle = baseAngle + (Math.random() - 0.5) * 0.9;
-      const jumpDistance = Math.random() * 80 + 170; // 170px - 250px energetic leap across the card
 
-      let targetCenterInArenaX = currentCenterXInArena + Math.cos(jitterAngle) * jumpDistance;
-      let targetCenterInArenaY = currentCenterYInArena + Math.sin(jitterAngle) * jumpDistance;
-
-      // If escaping would hit a wall or get trapped near the card edge, flee to the opposite side of the card
-      if (
-        targetCenterInArenaX < minCenterInArenaX ||
-        targetCenterInArenaX > maxCenterInArenaX ||
-        targetCenterInArenaY < minCenterInArenaY ||
-        targetCenterInArenaY > maxCenterInArenaY
-      ) {
-        const cursorRelativeX = targetCursorX - arenaRect.left;
-        const cursorRelativeY = targetCursorY - arenaRect.top;
-        const farX = cursorRelativeX < arenaRect.width / 2
-          ? arenaRect.width * (0.6 + Math.random() * 0.28)
-          : arenaRect.width * (0.12 + Math.random() * 0.28);
-        const farY = cursorRelativeY < arenaRect.height / 2
-          ? arenaRect.height * (0.6 + Math.random() * 0.28)
-          : arenaRect.height * (0.12 + Math.random() * 0.28);
-
-        targetCenterInArenaX = farX;
-        targetCenterInArenaY = farY;
+      interface Candidate {
+        cx: number;
+        cy: number;
+        distToCursor: number;
       }
+      const validCandidates: Candidate[] = [];
 
-      // If escaping towards YES button, deflect away across the card
-      const yesBtn = document.getElementById('btn-say-yes');
-      const yesRect = yesBtn?.getBoundingClientRect();
-      if (yesRect) {
-        const yesCenterXInArena = yesRect.left + yesRect.width / 2 - arenaRect.left;
-        const yesCenterYInArena = yesRect.top + yesRect.height / 2 - arenaRect.top;
-        const distToYes = Math.hypot(targetCenterInArenaX - yesCenterXInArena, targetCenterInArenaY - yesCenterYInArena);
-        if (distToYes < (yesRect.width + natural.width) / 2 + 35) {
-          targetCenterInArenaX += targetCenterInArenaX > yesCenterXInArena ? 120 : -120;
-          targetCenterInArenaY += targetCenterInArenaY > yesCenterYInArena ? 100 : -100;
+      // 1. Generate radial evasion rays away from cursor at various angles and leaps
+      const testAngles = [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.57, -1.57, 2.1, -2.1, Math.PI];
+      const testDistances = [150, 190, 230, 280, 320, 120];
+
+      for (const d of testDistances) {
+        for (const a of testAngles) {
+          const testCx = currentCenterXInArena + Math.cos(baseAngle + a) * d;
+          const testCy = currentCenterYInArena + Math.sin(baseAngle + a) * d;
+          if (isPositionClear(testCx, testCy)) {
+            const vpX = arenaRect.left + testCx;
+            const vpY = arenaRect.top + testCy;
+            const dCursor = Math.hypot(vpX - targetCursorX, vpY - targetCursorY);
+            validCandidates.push({ cx: testCx, cy: testCy, distToCursor: dCursor });
+          }
         }
       }
 
-      // Strict boundary clamp so button stays 100% inside the bigger card
-      const clampedCenterX = Math.max(minCenterInArenaX, Math.min(maxCenterInArenaX, targetCenterInArenaX));
-      const clampedCenterY = Math.max(minCenterInArenaY, Math.min(maxCenterInArenaY, targetCenterInArenaY));
+      // 2. Also test spacious designated zones on the card (e.g. top corners beside puppy, lower corners)
+      const topCornerY = pad + btnTopH + 10;
+      const bottomCornerY = arenaRect.height - pad - btnBottomH - 10;
 
-      const targetX = clampedCenterX - natural.centerX;
-      const targetY = clampedCenterY - natural.centerY;
+      const anchorSpots = [
+        { cx: minX + 8, cy: topCornerY }, // Top-Left beside puppy
+        { cx: maxX - 8, cy: topCornerY }, // Top-Right beside puppy
+        { cx: minX + 8, cy: bottomCornerY }, // Bottom-Left
+        { cx: maxX - 8, cy: bottomCornerY }, // Bottom-Right
+        { cx: minX + 8, cy: arenaRect.height * 0.5 }, // Mid-Left flank
+        { cx: maxX - 8, cy: arenaRect.height * 0.5 }, // Mid-Right flank
+        { cx: arenaRect.width * 0.22, cy: arenaRect.height * 0.76 }, // Lower-Left
+        { cx: arenaRect.width * 0.78, cy: arenaRect.height * 0.76 }, // Lower-Right
+      ];
+
+      for (const spot of anchorSpots) {
+        if (isPositionClear(spot.cx, spot.cy)) {
+          const vpX = arenaRect.left + spot.cx;
+          const vpY = arenaRect.top + spot.cy;
+          const dCursor = Math.hypot(vpX - targetCursorX, vpY - targetCursorY);
+          validCandidates.push({ cx: spot.cx, cy: spot.cy, distToCursor: dCursor });
+        }
+      }
+
+      let chosenTarget = { cx: currentCenterXInArena, cy: currentCenterYInArena };
+
+      if (validCandidates.length > 0) {
+        // Sort descending by distance from cursor (farthest first)
+        validCandidates.sort((a, b) => b.distToCursor - a.distToCursor);
+        // Pick randomly among the top 4 candidates for playful variety
+        const topPool = validCandidates.slice(0, Math.min(4, validCandidates.length));
+        const picked = topPool[Math.floor(Math.random() * topPool.length)];
+        chosenTarget = { cx: picked.cx, cy: picked.cy };
+      } else {
+        // Fallback: search a 25px grid across card for any position clear of text
+        let bestSpot: Candidate | null = null;
+        for (let gx = minX; gx <= maxX; gx += 25) {
+          for (let gy = minY; gy <= maxY; gy += 25) {
+            if (isPositionClear(gx, gy)) {
+              const vpX = arenaRect.left + gx;
+              const vpY = arenaRect.top + gy;
+              const dCursor = Math.hypot(vpX - targetCursorX, vpY - targetCursorY);
+              if (!bestSpot || dCursor > bestSpot.distToCursor) {
+                bestSpot = { cx: gx, cy: gy, distToCursor: dCursor };
+              }
+            }
+          }
+        }
+        if (bestSpot) {
+          chosenTarget = { cx: bestSpot.cx, cy: bestSpot.cy };
+        }
+      }
+
+      const targetX = chosenTarget.cx - natural.centerX;
+      const targetY = chosenTarget.cy - natural.centerY;
 
       buttonPosRef.current = { x: targetX, y: targetY };
       setButtonPos({ x: targetX, y: targetY });
@@ -281,7 +358,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         className="bg-white/95 sm:bg-white/90 backdrop-blur-sm sm:backdrop-blur-md rounded-[28px] sm:rounded-[40px] md:rounded-[48px] p-5 sm:p-8 md:p-10 border border-rose-100 shadow-[0_20px_50px_rgba(251,113,133,0.15)] text-center relative flex flex-col items-center gap-5 sm:gap-7 overflow-hidden"
       >
         {/* Cute puppy avatar matching viral video */}
-        <div className="relative">
+        <div data-text-zone="true" className="relative">
           <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl sm:rounded-3xl overflow-hidden border-2 sm:border-3 border-rose-200 shadow-md bg-rose-100 flex items-center justify-center text-4xl sm:text-5xl select-none">
             🐶
           </div>
@@ -289,7 +366,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         </div>
 
         {/* Header section matching Natural Tones typography */}
-        <div className="text-center space-y-1.5 sm:space-y-2 max-w-2xl lg:max-w-3xl w-full px-2">
+        <div data-text-zone="true" className="text-center space-y-1.5 sm:space-y-2 max-w-2xl lg:max-w-3xl w-full px-2">
           <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl xl:text-[2.6rem] font-serif text-[#6B2836] font-bold tracking-tight leading-tight sm:whitespace-nowrap">
             🌸 Will you go on a date with me? 🌸
           </h1>
@@ -299,7 +376,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         </div>
 
         {/* Fun Teasing Message Banner when dodge happens */}
-        <div className="min-h-[36px] sm:min-h-[40px] flex items-center justify-center px-2">
+        <div data-text-zone="true" className="min-h-[36px] sm:min-h-[40px] flex items-center justify-center px-2">
           <AnimatePresence mode="wait">
             {currentPhrase ? (
               <motion.div
@@ -328,6 +405,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
           {/* YES Button */}
           <button
             id="btn-say-yes"
+            data-text-zone="true"
             onClick={handleYesClick}
             style={{
               transform: `scale(${yesScale})`,
@@ -399,6 +477,7 @@ export const HeroProposal: React.FC<HeroProposalProps> = ({ onAccept }) => {
         {/* Counter of escape attempts if she tried to click No */}
         {dodgeCount > 0 && (
           <motion.p
+            data-text-zone="true"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-xs text-rose-500 font-medium flex items-center justify-center gap-1.5 -mt-2"
